@@ -1,0 +1,140 @@
+* DONE rbase
+CLOSED: [2020-01-08 Wed 11:00]
+:PROPERTIES:
+:header-args: :mkdirp yes
+:ID:
+:END:
+
+This layer contains all the basic R packages required for datascience and ML. A bunch of packages were added to the already extensive default list of packages in MatrixDS's docker file.
+
+The packages are defined in an R script called packages.R.
+
+This layer takes a /tremendously long time to build/. A couple of hours on a Macbook Pro 2019, with 6 cores and 32 GB of RAM. One should be careful in assessing whether this layer has to be disturbed. Automated builds on Dockerhub are likely to take even longer.
+
+Note: As such the dockerfile indicates that the packages are called in the last 2 layers only. It may be possible that subsequent image builds do not take as much time as I imagine.
+
+- [ ] It may be easier to find a way to keep the additional packages specified in the rstudio and shiny package list to be in sync.
+
+** R package list - BASE
+:PROPERTIES:
+:header-args: :mkdirp yes :tangle ./packages.R
+:ID:       0DD4CDF0-87A3-4E3D-BDCF-39B2EB7DEF00
+:END:
+
+This is a list of the basic packages being installed. These conver many commonly used libraries for data science. This layer will take a Long time to install.
+
+#+BEGIN_QUOTE
+Do not install custom libraries to this layer. Install in the next layer.
+#+END_QUOTE
+
+
+#+BEGIN_SRC R
+#Script for common package installation on MatrixDS docker image
+p<-c('nnet','kknn','randomForest','xgboost','tidyverse','plotly','shiny','shinydashboard',
+	  'devtools','FinCal','googleVis','DT', 'kernlab','earth',
+     'htmlwidgets','rmarkdown','lubridate','leaflet','sparklyr','magrittr','openxlsx',
+     'packrat','roxygen2','knitr','readr','readxl','stringr','broom','feather',
+     'forcats','testthat','plumber','RCurl','rvest','mailR','nlme','foreign','lattice',
+     'expm','Matrix','flexdashboard','caret','mlbench','plotROC','RJDBC','rgdal',
+     'highcharter','tidyquant','timetk','quantmod','PerformanceAnalytics','scales',
+     'tidymodels','C50', 'parsnip','rmetalog','reticulate','umap', 'glmnet', 'easypackages', 'drake', 'shinythemes', 'shinyjs', 'recipes', 'rsample', 'rpart.plot', 'remotes', 'DataExplorer', 'inspectdf', 'janitor', 'mongolite', 'jsonlite', 'config' )
+
+
+install.packages(p,dependencies = TRUE)
+
+#+END_SRC
+
+** R Package list - CUSTOM
+:PROPERTIES:
+:header-args: :mkdirp yes :tangle ./custom_packages.R
+:ID:       2EBA46F1-48F2-417F-8D68-4BD8B39FAA7F
+:END:
+
+Add your custom packages to this layer. In this way, only the additional packages are installed in a new layer.
+
+#+BEGIN_SRC R
+#Script for common package installation on MatrixDS docker image
+PKGS <- c(
+      "tidyverse", "mapproj", "maps", "genius"
+)
+
+install.packages(PKGS, dependencies = TRUE)
+devtools::install_github("tidyverse/googlesheets4", dependencies = TRUE)
+devtools::install_github("tidyverse/googletrendsR", dependencies = TRUE)
+
+
+#+END_SRC
+
+** Dockerfile
+:PROPERTIES:
+:header-args: :mkdirp yes :tangle ./Dockerfile
+:ID:       0C5AA86C-CE86-48E5-87E3-81DB9DC508CC
+:END:
+
+#+BEGIN_SRC dockerfile
+FROM shrysr/asmith:v1
+
+LABEL maintainer="Shreyas Ragavan <sr@eml.cc>" \
+	version="1.0"
+
+#install some helper python packages
+RUN pip install sympy numpy
+
+# R Repo, see https://cran.r-project.org/bin/linux/ubuntu/README.html
+RUN echo 'deb https://cloud.r-project.org/bin/linux/ubuntu bionic-cran35/' >> /etc/apt/sources.list
+RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
+RUN add-apt-repository ppa:marutter/c2d4u3.5
+
+# R-specific packages
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    r-base \
+    r-base-core \
+    r-recommended \
+    r-base-dev \
+    r-cran-boot \
+    r-cran-class \
+    r-cran-cluster \
+    r-cran-codetools \
+    r-cran-foreign \
+    r-cran-kernsmooth \
+    r-cran-matrix \
+    r-cran-rjava \
+    r-cran-rpart \
+    r-cran-spatial \
+    r-cran-survival
+
+COPY packages.R /usr/local/lib/R/packages.R
+COPY custom_packages.R /usr/local/lib/R/custom_packages.R
+
+# Install Basic R packages for datascience and ML
+RUN R CMD javareconf && \
+    Rscript /usr/local/lib/R/packages.R
+
+# Install custom set of R packages. This is on a separate layer for efficient image construction
+RUN Rscript /usr/local/lib/R/custom_packages.R
+
+#+END_SRC
+*
+** YAML for CI
+:PROPERTIES:
+:header-args: :mkdirp yes :tangle ./.github/workflows/rbase.yml
+:ID:       0A1BC308-1B29-4ACC-BA9D-8A17E9F20C04
+:END:
+
+#+BEGIN_SRC YAML
+name: Docker Image CI
+
+on: [push]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-18.04
+
+    steps:
+    - uses: shrysr/rbase@v2
+    - name: shiny
+      run:  docker build . --file Dockerfile --tag my-image-name:$(date +%s)
+#+END_SRC

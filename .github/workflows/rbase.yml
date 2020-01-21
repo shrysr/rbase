@@ -1,0 +1,14 @@
+name: Docker Image CI
+
+on: [push]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-18.04
+
+    steps:
+    - uses: shrysr/rbase@v2
+    - name: shiny
+      run:  docker build . --file Dockerfile --tag my-image-name:$(date +%s)
